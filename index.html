@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FILO</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+
+/* =========================
+   GLOBAL UI
+========================= */
+body{
+  font-family:system-ui;
+  margin:0;
+  background:#f6f9fc;
+  color:#0a2540;
+}
+
+.container{
+  max-width:720px;
+  margin:auto;
+  padding:20px;
+}
+
+.center{
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+}
+
+button{
+  padding:12px 20px;
+  border:none;
+  border-radius:999px;
+  background:#0a2540;
+  color:#fff;
+  cursor:pointer;
+}
+
+.card{
+  background:#fff;
+  border:1px solid #e6ebf1;
+  padding:16px;
+  border-radius:16px;
+  margin-top:16px;
+}
+
+input, select{
+  width:100%;
+  padding:10px;
+  margin-top:8px;
+  margin-bottom:10px;
+  border:1px solid #e6ebf1;
+  border-radius:10px;
+}
+
+.summary{
+  display:flex;
+  justify-content:space-between;
+}
+
+.profit{
+  font-weight:bold;
+}
+
+ul{
+  list-style:none;
+  padding:0;
+}
+
+li{
+  display:flex;
+  justify-content:space-between;
+  border-bottom:1px solid #eee;
+  padding:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- LANDING -->
+<div id="landing" class="center">
+  <h1>FILO</h1>
+  <p>Make your money simple to understand</p>
+  <button onclick="startApp()">Get Started</button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+
+<!-- TOPBAR -->
+<div id="topbar" style="display:none; padding:12px 20px; background:#fff; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <img id="userLogo" style="width:32px;height:32px;border-radius:6px;">
+    <div>
+      <div id="companyName" style="font-weight:600"></div>
+      <div style="font-size:12px;color:#888;">Active</div>
+    </div>
+  </div>
+  <div style="font-weight:600;">FILO</div>
+</div>
+
+<div class="container">
+
+<!-- SETUP -->
+<div id="setupFlow" class="card">
+<h3>Setup Organisation</h3>
+
+<div id="step1">
+  <input id="ownerName" placeholder="Your Name">
+  <input id="businessName" placeholder="Business Name">
+  <button onclick="nextStep(2)">Next</button>
+</div>
+
+<div id="step2" style="display:none">
+  <select id="paymentMode">
+    <option>UPI</option>
+    <option>Bank Transfer</option>
+    <option>Cash</option>
+  </select>
+  <button onclick="nextStep(3)">Next</button>
+</div>
+
+<div id="step3" style="display:none">
+  <input type="file" id="logoUpload">
+  <input id="accManager" placeholder="Account Manager Name">
+  <button onclick="finishSetup()">Finish Setup</button>
+</div>
+
+</div>
+
+<!-- MAIN -->
+<div id="main" style="display:none">
+
+<div class="card">
+  <div class="summary">
+    <div>Income: ₹<span id="income">0</span></div>
+    <div>Expense: ₹<span id="expense">0</span></div>
+  </div>
+  <div class="profit">Profit: ₹<span id="profit">0</span></div>
+</div>
+
+<div class="card">
+<h3>Profit Trend</h3>
+<canvas id="chart" height="120"></canvas>
+</div>
+
+<div class="card">
+<h3>Add Entry</h3>
+
+<select id="type">
+  <option value="income">Income</option>
+  <option value="expense">Expense</option>
+</select>
+
+<input id="desc" placeholder="Description">
+
+<select id="category">
+  <option>Brand Deal</option>
+  <option>Freelance</option>
+  <option>Ads</option>
+</select>
+
+<input id="amount" type="number" placeholder="Amount">
+
+<button onclick="addEntry()">Add</button>
+</div>
+
+<div class="card">
+<h3>Entries</h3>
+<ul id="list"></ul>
+</div>
+
+<div class="card">
+<button onclick="exportPDF()">Export PDF Report</button>
+<br><br>
+<button onclick="shareReport()">Share Report</button>
+</div>
+
+</div>
+</div>
+
+<script>
+
+/* ========================= NAV ========================= */
+function startApp(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("app").style.display="block";
+}
+
+function nextStep(step){
+  document.querySelectorAll("#setupFlow > div").forEach(el=>el.style.display="none");
+  document.getElementById("step"+step).style.display="block";
+}
+
+/* ========================= PROFILE ========================= */
+function finishSetup(){
+  let profile={
+    business:document.getElementById("businessName").value,
+    logo:null
+  };
+
+  let file=document.getElementById("logoUpload").files[0];
+
+  if(file){
+    let reader=new FileReader();
+    reader.onload=e=>{
+      profile.logo=e.target.result;
+      saveProfile(profile);
+    };
+    reader.readAsDataURL(file);
+  }else saveProfile(profile);
+}
+
+function saveProfile(profile){
+  localStorage.setItem("filoProfile",JSON.stringify(profile));
+  loadProfile();
+  document.getElementById("setupFlow").style.display="none";
+  document.getElementById("main").style.display="block";
+}
+
+function loadProfile(){
+  let p=JSON.parse(localStorage.getItem("filoProfile"));
+  if(!p) return;
+
+  document.getElementById("topbar").style.display="flex";
+  document.getElementById("companyName").innerText=p.business;
+  if(p.logo) document.getElementById("userLogo").src=p.logo;
+}
+loadProfile();
+
+/* ========================= DATA ========================= */
+function getData(){
+  return JSON.parse(localStorage.getItem("data"))||[];
+}
+
+function saveData(d){
+  localStorage.setItem("data",JSON.stringify(d));
+}
+
+let editIndex=null;
+
+/* FIXED */
+function addEntry(){
+  let type=document.getElementById("type").value;
+  let desc=document.getElementById("desc").value;
+  let amount=parseFloat(document.getElementById("amount").value);
+
+  if(!desc || isNaN(amount)) return;
+
+  let data=getData();
+
+  if(editIndex!==null){
+    data[editIndex]={type,desc,amount};
+    editIndex=null;
+  }else{
+    data.push({type,desc,amount});
+  }
+
+  saveData(data);
+  updateUI();
+  renderChart();
+}
+
+function deleteEntry(i){
+  let d=getData();
+  d.splice(i,1);
+  saveData(d);
+  updateUI();
+  renderChart();
+}
+
+/* ========================= UI ========================= */
+function updateUI(){
+  let data=getData();
+  let income=0,expense=0;
+
+  let list=document.getElementById("list");
+  list.innerHTML="";
+
+  data.forEach((i,idx)=>{
+    if(i.type==="income") income+=i.amount;
+    else expense+=i.amount;
+
+    list.innerHTML += `
+      <li>
+        ${i.desc} ₹${i.amount}
+        <button onclick="deleteEntry(${idx})">X</button>
+      </li>
+    `;
+  });
+
+  document.getElementById("income").innerText=income;
+  document.getElementById("expense").innerText=expense;
+  document.getElementById("profit").innerText=income-expense;
+}
+
+/* ========================= CHART ========================= */
+let chartInstance=null;
+
+function renderChart(){
+  let data=getData();
+  let balance=0;
+  let values=[];
+
+  data.forEach(i=>{
+    balance += (i.type==="income") ? i.amount : -i.amount;
+    values.push(balance);
+  });
+
+  if(chartInstance) chartInstance.destroy();
+
+  chartInstance=new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{
+      labels:data.map((_,i)=>"Tx "+(i+1)),
+      datasets:[{data:values,borderWidth:2}]
+    }
+  });
+}
+
+/* ========================= PDF ========================= */
+function exportPDF(){
+  const { jsPDF } = window.jspdf;
+  let doc = new jsPDF();
+
+  let data = getData();
+
+  let income = 0, expense = 0;
+
+  data.forEach(i=>{
+    if(i.type === "income") income += i.amount;
+    else expense += i.amount;
+  });
+
+  let profit = income - expense;
+
+  let pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFillColor(10, 37, 64);
+  doc.rect(0, 0, pageWidth, 45, "F");
+
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(20);
+  doc.text("FILO FINANCIAL REPORT", 15, 22);
+
+  doc.setFontSize(10);
+  doc.text("Automated financial intelligence summary", 15, 32);
+
+  doc.setTextColor(0,0,0);
+
+  doc.setFontSize(12);
+  doc.text("SUMMARY", 15, 60);
+
+  doc.roundedRect(15, 70, 55, 25, 3, 3);
+  doc.text("Total Income", 20, 80);
+  doc.text("₹ " + income, 20, 90);
+
+  doc.roundedRect(75, 70, 55, 25, 3, 3);
+  doc.text("Total Expense", 80, 80);
+  doc.text("₹ " + expense, 80, 90);
+
+  doc.roundedRect(135, 70, 55, 25, 3, 3);
+  doc.text("Net Profit", 140, 80);
+  doc.text("₹ " + profit, 140, 90);
+
+  let y = 145;
+
+  data.forEach(i=>{
+    if(y > 270){
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.text(i.type.toUpperCase(), 15, y);
+    doc.text(i.desc, 60, y);
+    doc.text("₹ " + i.amount, 160, y);
+
+    y += 12;
+  });
+
+  doc.save("FILO_Professional_Report.pdf");
+}
+
+/* INIT */
+updateUI();
+renderChart();
+
+</script>
+
+</body>
+</html>
